@@ -14,6 +14,18 @@ parsed = JSON.parse(json)
 i = 2
 
 client = ElasticSearch.new('http://127.0.0.1:9200', :index => "weibo", :type => "post")
+#client.delete_index("weibo")
+#client.create_index("weibo")
+#client.update_mapping({
+#	:dynamic => "false",
+#	:properties => {
+#		:id => {:type => :integer},
+#		:user_id => {:type => :long},
+#		:text => {:type => :string},
+#		:english_text => {:type => :string},
+#		:created_at => {:type => :string }
+#	},
+#}, :index => "weibo", :type => "post")
 
 parsed["hits"].each do |hit|
 	begin
