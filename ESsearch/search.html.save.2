@@ -1,0 +1,206 @@
+<head>
+    <title> WeiboSuite: tools to analyse Chinese microblogging </title>
+    <style> span.highlight
+        { background-color:yellow; }
+    </style>
+<!-- JQuery required for connection to ElasticSearch server -->
+    <script src="http://code.jquery.com/jquery-1.9.1.js"></script>
+<!-- JQuery UI required for tabs -->
+    <script src="http://code.jquery.com/ui/1.10.2/jquery-ui.js"></script>
+<!-- JQuery UI style sheet required for tabs -->
+    <link rel="stylesheet" href="http://code.jquery.com/ui/1.10.2/themes/cupertino/jquery-ui.css" />
+<!-- Load in Google fonts -->
+	<link href="http://fonts.googleapis.com/css?family=Open+Sans" rel='stylesheet' type='text/css'>
+<!-- Our own style sheet to adjust fonts -->
+    <link rel="stylesheet" href="style.css" />
+<script>
+// ACTIVATE TABS
+    $(function() {
+      $( "#tabs" ).tabs();
+    });
+
+// SET SEARCH SERVER
+    var searchserver = "http://es.weibosuite.com";
+    var searchport = "80";
+    
+// CHECK THAT ELASTICSEARCH IS RUNNING
+    $(function() {
+      $.getJSON(searchserver + ":" + searchport + "/_cluster/nodes/_local", function(data) {
+            console.log(data);
+            
+            var node_id = Object.keys(data.nodes)[0]
+            , cluster_state = data['ok']
+            , cluster_name = data['cluster_name']
+            , node_name    = data.nodes[node_id]['name']
+            , host_name    = data.nodes[node_id]['hostname'];
+            
+            $('#cluster_state').html( cluster_state);
+            $('#cluster_name').html( cluster_name);
+            $('#node_name').html(    node_name   );
+            $('#host_name').html(    host_name   );
+            })
+      });
+
+</script>
+
+</head>
+<body>
+
+<div id="logo"></div>
+<h3> Tools for journalists and netizens alike. </h3>
+<button id="add_tab" onclick='$("#tabs").tabs( "select", "tabs-2" )'>Add Tab</button>
+<div id="tabs">
+    <ul>
+        <li><a href="#tabs-1">censored posts search</a></li>
+        <li><a href="#tabs-2">image-to-Chinese-to-English converter</a></li>
+        <li><a href="#tabs-3">image splitter</a></li>
+        <li><a href="#tabs-4">about</a></li>
+    </ul>
+    <div id="2">
+
+<!-- TAB 1: SEARCH PAGE -->
+<h2> Sina Weibo Censored Posts Search </h2>
+<form name="search_form" method="get" action="index.html">
+  <p>Search for: <input type="search" name="search_string" id="search_string"></p>
+
+  <p><input type="radio" name="search_operator" value="or" checked>or
+     <input type="radio" name="search_operator" value="and"       >and
+     <input type="radio" name="search_operator" value="phrase"    >exact phrase
+  </p> 
+
+  <p><input name="srch_button" type="button" value='search' id="srch_button" onclick="letsSearch('click')"></p>
+</form>
+
+<p><small>
+    Search engine healthy? <em id="cluster_state">no</em>;
+    (Cluster: <em id="cluster_name">(not connected)</em>,
+    Node: <em id="node_name">(not connected)</em>,
+    Server: <em id="host_name">localhost</em>)
+</small></p>
+
+<hr>
+<p id='results heading'></p>
+<p id='results body'></p>
+
+
+
+    </div>
+    <div id="tabs-2">
+    <!-- TAB 2: IMAGE-TO-TEXT -->
+        <h2> Image-to-Chinese-to-English converter </h2>
+        <p>Enter URL of image here then it will show Chinese and English text. </p>
+        <iframe src="tools/ocr" width="1024" height="768" frameBorder="0"></iframe>
+    </div>
+    <div id="tabs-3">
+        <!-- TAB 2: IMAGE SPLITTING -->
+        <h2> Image splitter </h2>
+        <p>Enter URL of image here then it will split it. </p>
+        <iframe src="tools/split" width="1024" height="768" frameBorder="0"></iframe>
+    </div>
+    <div id="tabs-4">
+    <!-- TAB, FINAL: ABOUT -->
+        <h2> About </h2>
+        <p> These tools were created by journalists <a href="http://twitter.com/digitalhen"> Henry Williams</a>,
+        <a href="http://twitter.com/jackycwong"> Jacky Wong</a>, and <a href="http://twitter.com/tonyyooaus"> Tony Yoo</a>.
+        </p>
+        <p> Thanks to the <a href="http://hku.hk">University of Hong Kong</a>'s <a href="http://jmsc.hku.hk">Journalism and Media Studies Centre</a>,
+        especially the <a href="http://datalab.jmsc.hku.hk/">Data Journalism Lab</a> for the source data and guidance in this project.
+        </p>
+        <p> Copyright 2013. All Rights Reserved. </p>
+        <p> v20130509TY </p>
+    </div>
+</div>
+
+<script type="text/javascript">
+
+    var userForm = document.forms.search_form;
+    
+// FORCING THE SEARCH BUTTON TO BE CLICKED WHEN THE ENTER KEY IS PRESSED
+    $("#search_string").keydown(function(pressedkey){
+      if(pressedkey.keyCode == 13){
+          $("#srch_button").click();
+          pressedkey.preventDefault();
+      }
+    });
+
+// DISPLAY LATEST DELETED POSTS WHEN THE PAGE LOADS
+    letsSearch('latest');
+
+// SEARCH CODE
+    function letsSearch(context) {
+        // BUTTON CLICKED BUT THERE ARE NO SEARCH TERMS
+        if (context == "click" && userForm.elements.search_string.value == "") {
+            document.getElementById("results heading").innerHTML="<span id='search feedback'>No search terms entered</span>";
+            document.getElementById("results body").innerHTML="";
+        }
+        else {
+           var search_object = new Object();
+           
+           var search_jsonstring = "";
+           // BUTTON CLICKED AND THERE ARE SEARCH TERMS (HURRAH)
+           if (context == "click" && userForm.elements.search_string.value != "") {
+               search_object.query = userForm.elements.search_string.value;
+               // if it's "and" or "exact phrase" search, then add those requirements
+               if (userForm.elements.search_operator.value == "and") {
+                   search_object.operator = "and";
+               }
+               else if (userForm.elements.search_operator.value == "phrase") {
+                   search_object.type = "phrase";
+               } 
+               search_jsonstring = searchserver + ':' + searchport + '/_search?source={"query":{"match":{"_all":' + JSON.stringify(search_object) + '}}}';
+           }
+           // BUTTON NOT CLICKED - LOAD LATEST POSTS FOR GENERAL BROWSING
+           else {
+               var howmanyposts = 20;
+               search_jsonstring = searchserver + ":" + searchport + "/_search?pretty=true&q=*:*&size=" + howmanyposts;
+           }
+            
+           // transmit the query to ElasticSearch
+           $.getJSON(search_jsonstring, function(data) {
+             var resultObject = new Object();
+             resultObject = data;
+
+		   	 // DISPLAY RESULTS CODE
+             // construct results header
+             var results_header = "";
+             if (context == "click" && userForm.elements.search_string.value != "") {
+               results_header = resultObject.hits.total + " posts found in " + resultObject.took + " millisecond(s)<hr>";
+             }
+             else {
+               results_header = "The latest " + howmanyposts + " censored posts from Sina Weibo<hr>";
+             }
+             document.getElementById("results heading").innerHTML=results_header;
+
+             // construct results body
+             var posts = resultObject.hits.hits;
+             var results_body = "";
+             for (var i=0; i<posts.length; i++)
+             {
+                 var post_rowA = "<strong>original: " + posts[i]._source.text + "</strong>";
+                 var post_rowB = "<br> translation to English: " + posts[i]._source.english_text;
+                 var post_rowC = "<p><small><strong> relevance: " + posts[i]._score +
+                     " </strong> | post author userID: " + posts[i]._source.user_id +
+                     " | post date: " + posts[i]._source.created_at +
+                     "</small>";
+                 var post_imagebox = ""
+                 if (posts[i]._source.picture_url != "") {
+                     post_imagebox = "<a class='thumbnail' href='" +  posts[i]._source.picture_url + "'>" +
+                        "<img src='" + posts[i]._source.picture_url + "' height=70 width=70 valign=top align=center>" +
+                        "<span><img src='" + posts[i]._source.picture_url + "'>" + "</a>" +
+                        "<br><small><a href='http://www.weibosuite.com/tools/ocr/?url=" + posts[i]._source.picture_url + "'>convert to text</a></small>" +
+                        "<br><small><a href='http://www.weibosuite.com/tools/split/?url=" + posts[i]._source.picture_url + "'>split image</a></small><button id='add_tab' onclick='$(\"#tabs\").tabs( \"select\", \"tabs-2\" )'>Add Tab</button>";
+                 }
+                 else post_imagebox = ""; 
+                 results_body = results_body + "<table><tr><td>" + post_rowA + post_rowB + post_rowC + "</td><td width=100 align=center>" + post_imagebox + "</td></tr></table><hr>" ;
+             }
+             results_body = results_body + "</table>";
+             // for debugging only
+             // results_body = results_body + "<small><font color=white>" + search_jsonstring + "</font></small>";
+             document.getElementById("results body").innerHTML=results_body;
+           });
+        }
+    };
+
+</script>
+
+</body>
